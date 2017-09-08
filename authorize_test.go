@@ -141,10 +141,24 @@ func TestNonceFromLRU(t *testing.T) {
 	}
 }
 
+func TestSignerFound(t *testing.T) {
+	pos, err := ag.getSignerID(`bob`, `appkey2`)
+	if !(err == nil && pos == 1) {
+		t.Errorf("expected signer lookup up to succeed")
+	}
+}
+
 func TestSignerNotFound(t *testing.T) {
 	pos, err := ag.getSignerID(`unknown018qoegdxc`, `unkown093ytid`)
 	if err == nil || pos != -1 {
 		t.Errorf("expected to fail lookup up a signer but succeeded")
+	}
+}
+
+func TestDefaultSignerFound(t *testing.T) {
+	pos, err := ag.getSignerID(`bob`, ``)
+	if !(err == nil && pos == 1) {
+		t.Errorf("expected default signer lookup up to succeed")
 	}
 }
 
