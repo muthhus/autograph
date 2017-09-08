@@ -53,8 +53,8 @@ func (a *autographer) authorize(r *http.Request, body []byte) (userid string, au
 }
 
 // lookupCred searches the authorizations for a user whose id matches the provided
-// id string. If found, a Credential function is return to complete the hawk authorization.
-// If not found, a function that returns an error is returned.
+// id string. If found, returns a Credential function to complete the hawk authorization.
+// If not found, returns a function that returns an error.
 func (a *autographer) lookupCred(id string) hawk.CredentialsLookupFunc {
 	if _, ok := a.auths[id]; ok {
 		// matching user found, return its token
