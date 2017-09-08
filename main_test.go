@@ -112,6 +112,32 @@ signers:
 authorizations:
 	- tester
 `)},
+		// Duplicate Signer IDs
+		{false, []byte(`
+server:
+    listen: "localhost:8000"
+
+signers:
+    - id: testsigner1
+      privatekey: |
+        -----BEGIN EC PRIVATE KEY-----
+        MIGkAgEBBDBe7dXZ/epqVkrRWbStmwe2WyTcpWJ5cCbrqcM4tCG4vdX9b0Ri+VYo
+        LiHkmxenK0mgBwYFK4EEACKhZANiAASvggNRMynXOObY9QW4gJXCwgsNa/8vcjHK
+        wgzyqfXUzv3PbiZbDVYtYT7FMzd84CmX9BEtsE8bQS2Ci7q0Izp9aRUjCiTlUuAZ
+        XMhBcGTy1e65CRjbCNM4A8w0/K30x4k=
+        -----END EC PRIVATE KEY-----
+
+    - id: testsigner1
+      privatekey: |
+        -----BEGIN RSA PRIVATE KEY-----
+        MIIBOgIBAAJBALhlXvMK5hIgGGRgdUycR8FWAmZC5bOeUrLr9SWep2NnR9nmBDgS
+        AYYFTraBw2se+oagYyWjccDnbJR9GPHarWkCAwEAAQJAey1kbxCxvhvoj20MDoA7
+        QsB02+EGVqWFcvZCjb3c7X4XZS0Oe1y1TJSmyL7oEepuL3NTgXYib+RSLT8vph8u
+        zQIhANzuVRWzm7sSgTsPgg/P+q/5O2BXzoY/QpWdDb8DWEVjAiEA1apqeW9u38o3
+        xpjJBa7tTNzgmuZtupFvB7baO8So0cMCICjTxld3VI0Sk10ltYRUi+AfL7DTKTA3
+        2ocpedPVu2c/AiEAuCx0KQa3sKmTWFmcdYyqOeXuqTbVAMuZxDGGfZxv1JcCIA2v
+        84l6Qav0l4A3NDdT+cotbnDqQ5wjF+UZ8uwsBwSl
+        -----END RSA PRIVATE KEY-----`)},
 	}
 	for i, testcase := range testcases {
 		var conf configuration
