@@ -190,3 +190,24 @@ func TestAddDuplicateAuthorization(t *testing.T) {
 	tmpag.addSigners(conf.Signers)
 	tmpag.addAuthorizations(authorizations)
 }
+
+
+func TestUserCanAccessAuthedSigner(t *testing.T) {
+	// e.g. bob -> appkey2
+}
+
+func TestUserCannotAccessUnauthedSigner(t *testing.T) {
+	// e.g. bob -> appkey1
+}
+
+func TestUserCannotAccessNonexistentSigner(t *testing.T) {
+	// e.g. bob -> notanappkey
+}
+
+func TestUnauthedUserCannotAccessSigner(t *testing.T) {
+	// e.g. nobody -> appkey1
+}
+
+func TestUnauthedUserCannotAccessNonexistentSigner(t *testing.T) {
+	// e.g. nobody -> notanappkey
+}
