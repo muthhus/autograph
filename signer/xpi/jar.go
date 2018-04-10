@@ -12,14 +12,33 @@ import (
 	"strings"
 )
 
-func makeJARManifests(input []byte) (manifest, sigfile []byte, err error) {
+
+// makeJARManifestAndSignature writes hashes for all entries in a zip to a
+// manifest file then hashes the manifest file to write a signature
+// file and returns both
+func makeJARManifestAndSignature(input []byte) (manifest, sigfile []byte, err error) {
+	manifest, err = makeJARManifest(input)
+	if err != nil {
+		return
+	}
+
+	sigfile, err = makeJARSignature(manifest)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+// makeJARManifest calculates a sha1 and sha256 hash for each zip entry and writes them to a manifest file
+func makeJARManifest(input []byte) (manifest []byte, err error) {
 	inputReader := bytes.NewReader(input)
 	r, err := zip.NewReader(inputReader, int64(len(input)))
 	if err != nil {
 		return
 	}
 
-	// first generate the manifest file by calculating a sha1 and sha256 hash for each zip entry
+	// generate the manifest file by calculating a sha1 and sha256 hash for each zip entry
 	mw := bytes.NewBuffer(manifest)
 	manifest = []byte(fmt.Sprintf("Manifest-Version: 1.0\n\n"))
 
@@ -34,11 +53,11 @@ func makeJARManifests(input []byte) (manifest, sigfile []byte, err error) {
 		}
 		rc, err := f.Open()
 		if err != nil {
-			return manifest, sigfile, err
+			return manifest, err
 		}
 		data, err := ioutil.ReadAll(rc)
 		if err != nil {
-			return manifest, sigfile, err
+			return manifest, err
 		}
 		fmt.Fprintf(mw, "Name: %s\nDigest-Algorithms: SHA1 SHA256\n", f.Name)
 		h1 := sha1.New()
@@ -51,7 +70,11 @@ func makeJARManifests(input []byte) (manifest, sigfile []byte, err error) {
 	manifestBody := mw.Bytes()
 	manifest = append(manifest, manifestBody...)
 
-	// then calculate a signature file by hashing the manifest with sha1 and sha256
+	return
+}
+
+// makeJARSignature calculates a signature file by hashing the manifest with sha1 and sha256
+func makeJARSignature(manifest []byte) (sigfile []byte, err error) {
 	sw := bytes.NewBuffer(sigfile)
 	fmt.Fprint(sw, "Signature-Version: 1.0\n")
 	h1 := sha1.New()
@@ -65,9 +88,15 @@ func makeJARManifests(input []byte) (manifest, sigfile []byte, err error) {
 	return
 }
 
-// repackJAR inserts the manifest, signature file and pkcs7 signature in the input JAR file,
-// and return a JAR ZIP archive
-func repackJAR(input, manifest, sigfile, signature []byte) (output []byte, err error) {
+// Metafile is a file to pack into a JAR at .Name with contents .Body
+// .Name should begin with META-INF/ but this is not checked
+type Metafile struct {
+	Name string
+	Body []byte
+}
+
+// repackJARWithMetafiles inserts metafiles in the input JAR file and returns a JAR ZIP archive
+func repackJARWithMetafiles(input []byte, metafiles []Metafile) (output []byte, err error) {
 	var (
 		rc     io.ReadCloser
 		fwhead *zip.FileHeader
@@ -116,15 +145,7 @@ func repackJAR(input, manifest, sigfile, signature []byte) (output []byte, err e
 	}
 	// insert the signature files. Those will be compressed
 	// so we don't have to worry about their alignment
-	var metas = []struct {
-		Name string
-		Body []byte
-	}{
-		{"META-INF/manifest.mf", manifest},
-		{"META-INF/mozilla.sf", sigfile},
-		{"META-INF/mozilla.rsa", signature},
-	}
-	for _, meta := range metas {
+	for _, meta := range metafiles {
 		fwhead = &zip.FileHeader{
 			Name:   meta.Name,
 			Method: zip.Deflate,
@@ -148,6 +169,17 @@ func repackJAR(input, manifest, sigfile, signature []byte) (output []byte, err e
 	return
 }
 
+// repackJAR inserts the manifest, signature file and pkcs7 signature in the input JAR file,
+// and return a JAR ZIP archive
+func repackJAR(input, manifest, sigfile, signature []byte) (output []byte, err error) {
+	var metas = []Metafile{
+		{"META-INF/manifest.mf", manifest},
+		{"META-INF/mozilla.sf", sigfile},
+		{"META-INF/mozilla.rsa", signature},
+	}
+	return repackJARWithMetafiles(input, metas)
+}
+
 // The JAR format defines a number of signature files stored under the META-INF directory
 // META-INF/MANIFEST.MF
 // META-INF/*.SF
@@ -168,4 +200,29 @@ func isSignatureFile(name string) bool {
 		}
 	}
 	return false
+}
+
+// mustReadFileFromZIP reads a given filename out of a ZIP and returns it or panics
+func mustReadFileFromZIP(signedXPI []byte, filename string) (data []byte) {
+	zipReader := bytes.NewReader(signedXPI)
+	r, err := zip.NewReader(zipReader, int64(len(signedXPI)))
+	if err != nil {
+		panic(fmt.Sprintf("Error reading ZIP %s", err))
+	}
+
+	for _, f := range r.File {
+		if f.Name == filename {
+			rc, err := f.Open()
+			defer rc.Close()
+			if err != nil {
+				panic(fmt.Sprintf("Error opening file %s in ZIP %s", filename, err))
+			}
+			data, err = ioutil.ReadAll(rc)
+			if err != nil {
+				panic(fmt.Sprintf("Error reading file %s in ZIP %s", filename, err))
+			}
+			return
+		}
+	}
+	panic(fmt.Sprintf("failed to find %s in ZIP", filename))
 }
