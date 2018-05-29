@@ -39,6 +39,25 @@ type signatureresponse struct {
 	X5U        string `json:"x5u,omitempty"`
 }
 
+type requestType int
+const (
+	_ = iota
+	requestTypeData
+	requestTypeHash
+	requestTypeFile
+)
+func urlToRequestType(url string) requestType {
+	if strings.HasSuffix(url, "/sign/data") {
+		return requestTypeData
+	} else if strings.HasSuffix(url, "/sign/hash") {
+		return requestTypeHash
+	} else if strings.HasSuffix(url, "/sign/file") {
+		return requestTypeFile
+	} else {
+		panic(fmt.Sprintf("Unrecognized request type for url", url))
+	}
+}
+
 func main() {
 	var (
 		userid, pass, data, hash, url, infile, outfile, keyid, cn string
@@ -71,6 +90,8 @@ examples:
 	U2lnbmF0dXJlLVZlcnNpb246IDEuMApNRDUt...
 	$ go run client.go -d U2lnbmF0dXJlLVZlcnNpb2...  -cn cariboumaurice -k webextensions-rsa -o detachedxpisig.pkcs7
 
+* sign an XPI file:
+        $ go run client.go -f unsigned.xpi -cn cariboumaurice -k webextensions-rsa -o signed.xpi
 `)
 	}
 	flag.StringVar(&userid, "u", "alice", "User ID")
@@ -167,6 +188,7 @@ examples:
 			if len(requests) != len(responses) {
 				log.Fatalf("sent %d signature requests and got %d responses, something's wrong", len(requests), len(responses))
 			}
+			reqType := urlToRequestType(url)
 			for i, response := range responses {
 				input, err := base64.StdEncoding.DecodeString(requests[i].Input)
 				if err != nil {
@@ -192,8 +214,15 @@ examples:
 					sigStr += sig.Mode + "=" + response.Signature + "\n"
 					sigData = []byte(sigStr)
 				case xpi.Type:
-					sigStatus = verifyXPI(input, response)
-					sigData, err = base64.StdEncoding.DecodeString(response.Signature)
+					sigStatus = verifyXPI(input, request, response, reqType)
+					switch reqType {
+					case requestTypeData:
+						sigData, err = base64.StdEncoding.DecodeString(response.Signature)
+					case requestTypeFile:
+						sigData, err = base64.StdEncoding.DecodeString(response.SignedFile)
+					default:
+						err = fmt.Errorf("Cannot decode signature data for request type %s", reqType)
+					}
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -282,16 +311,31 @@ func verifyContentSignature(input []byte, resp signatureresponse, endpoint strin
 	return ecdsa.Verify(pubKey, input, sig.R, sig.S)
 }
 
-func verifyXPI(input []byte, resp signatureresponse) bool {
-	sig, err := xpi.Unmarshal(resp.Signature, input)
-	if err != nil {
-		log.Fatal(err)
+func verifyXPI(input []byte, req signaturerequest, resp signatureresponse, reqType requestType) bool {
+	switch reqType {
+	case requestTypeData:
+		sig, err := xpi.Unmarshal(resp.Signature, input)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = sig.VerifyWithChain(nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return true
+	case requestTypeFile:
+		signedFile, err := base64.StdEncoding.DecodeString(resp.SignedFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = xpi.VerifySignedFile(signedFile, req.Options.(xpi.Options))
+		if err != nil {
+			log.Fatal(err)
+		}
+		return true
+	default:
+		return false
 	}
-	err = sig.VerifyWithChain(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return true
 }
 
 func verifyAPK(signedAPK []byte) bool {
